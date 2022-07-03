@@ -235,36 +235,6 @@ class MQConsumer:
         os.remove(oldest_file)
         return msg
 
-    def getMessageList(self, limit):
-        queue = self.exchange.getQueue(self.queue_name)
-        path = queue.output_path
-
-        # Check if message exists
-        os.listdir(queue.output_path)
-        dirs = os.listdir(queue.output_path)
-        if len(dirs) == 0:
-            return None
-
-        oldest_file = sorted([os.path.join(queue.output_path, f) for f in os.listdir(queue.output_path)],
-                             key=os.path.getctime)
-        lst_files = []
-
-        lst_message = []
-        count = 0
-        for m in oldest_file:
-            msg = MQMessage()
-            msg.loadFromFile(m)
-            lst_message.append(msg)
-            lst_files.append(m)
-            count = count + 1
-            if count == limit:
-                break
-
-        # Remove message files
-        for m in lst_files:
-            os.remove(m)
-
-        return lst_message
 
     def getMessageList(self, limit):
         queue = self.exchange.getQueue(self.queue_name)
@@ -276,24 +246,45 @@ class MQConsumer:
         if len(dirs) == 0:
             return None
 
-        oldest_file = sorted([os.path.join(queue.output_path, f) for f in os.listdir(queue.output_path)],
-                             key=os.path.getctime)
-        lst_files = []
 
+        # Get list of all files in a given directory sorted by name
+        dir_name = queue.output_path
+        list_of_folders = sorted(filter(lambda x: os.path.isdir(os.path.join(dir_name, x)),
+                                      os.listdir(dir_name)))
+
+        lst_files = []
         lst_message = []
+        processed_folders = []
         count = 0
-        for m in oldest_file:
-            msg = MQMessage()
-            msg.loadFromFile(m)
-            lst_message.append(msg)
-            lst_files.append(m)
-            count = count + 1
-            if count == limit:
-                break
+
+        previous_folder = None
+        for folder_name in list_of_folders:
+            print(folder_name)
+            processed_folders.append(folder_name)
+            # Get sorted list fo files
+            oldest_file = sorted([os.path.join(queue.output_path, folder_name, f) for f in os.listdir(os.path.join(queue.output_path, folder_name))],
+                             key=os.path.getctime)
+
+
+            for m in oldest_file:
+                print("- {}".format(m))
+                msg = MQMessage()
+                msg.loadFromFile(m)
+                lst_message.append(msg)
+                lst_files.append(m)
+                count = count + 1
+                if count == limit:
+                    break
 
         # Remove message files
         for m in lst_files:
             os.remove(m)
+
+        # Remove folder if all messages are consumed
+        for folder_name in processed_folders:
+            folder_path = os.path.join(queue.output_path, folder_name)
+            if len(os.listdir(folder_path)) == 0:
+                os.rmdir(folder_path)
 
         return lst_message
 
@@ -372,11 +363,12 @@ if __name__ == '__main__':
     # producer.postMessage("test_folder", msg_dict)
     # producer.postMessage("test_folder", msg_dict)
 
-    # consumer = exchange.getConsumer("test_folder")
-    # msg = consumer.getMessage()
-    # while msg is not None:
-    #    print("key:{},message:{},ceation date:{}".format(msg.key,msg.message,msg.creation_date))
-    #    msg = consumer.getMessage()
+    # consumer testing ------------------------------------------
+    consumer = exchange.getConsumer("test_folder")
+    lst_msg = consumer.getMessageList(25)
+    for msg in lst_msg:
+       print("key:{},message:{},ceation date:{}".format(msg.key,msg.message,msg.creation_date))
+
 
 '''
     dirs = os.listdir("C:\\Users\\171802\\PycharmProjects\\Binance\\venv\\MessageQueue\\Test\\Transactions")
